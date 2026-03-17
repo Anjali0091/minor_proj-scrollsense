@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "ScrollSense Nudge Guard",
+  "description": "Detects long scrolling streaks and applies nudges on distracting feeds.",
+  "version": "1.0.0",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://localhost:5000/*",
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://x.com/*",
+    "https://www.instagram.com/*",
+    "https://www.reddit.com/*",
+    "https://www.facebook.com/*",
+    "https://m.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://x.com/*",
+        "https://www.instagram.com/*",
+        "https://www.reddit.com/*",
+        "https://www.facebook.com/*",
+        "https://m.facebook.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "ScrollSense"
+  }
+}

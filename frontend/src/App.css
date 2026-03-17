@@ -1,0 +1,270 @@
+.page {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  box-sizing: border-box;
+}
+
+.card {
+  width: min(720px, 100%);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #dfd6ca;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(27, 23, 21, 0.12);
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  color: #84563e;
+  margin-bottom: 0.25rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 3vw, 2.4rem);
+  color: #2b1711;
+}
+
+.subtitle {
+  margin: 0.75rem 0 1.5rem;
+  color: #5f4f47;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.stats-grid article {
+  padding: 0.9rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #ecd8c6;
+}
+
+.stats-grid h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.stats-grid p {
+  margin: 0.35rem 0 0;
+  color: #5f4f47;
+  font-size: 0.9rem;
+}
+
+.thresholds {
+  border: 1px dashed #cc9368;
+  background: #fff7f2;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  color: #73442a;
+}
+
+.task-form {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.task-form input {
+  flex: 1;
+  border: 1px solid #d2c2b6;
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  font: inherit;
+}
+
+.task-form button,
+.delete {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.72rem 0.9rem;
+  background: linear-gradient(135deg, #dd8a46, #bf5f33);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.task-list li {
+  background: #fff;
+  border: 1px solid #ebdfd7;
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.task-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  flex: 1;
+}
+
+.task-list li.done span {
+  text-decoration: line-through;
+  color: #8a7f7a;
+}
+
+.delete {
+  background: #3d2215;
+}
+
+.status,
+.error {
+  margin: 0.6rem 0;
+}
+
+.error {
+  color: #aa2f18;
+}
+
+.feed {
+  margin-top: 1.25rem;
+  height: 280px;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid #e5d3c4;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+  background: #fff9f4;
+}
+
+.feed-blocked {
+  pointer-events: none;
+  filter: grayscale(0.4) blur(1px);
+}
+
+.feed-card {
+  border: 1px solid #ead9cc;
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: #fff;
+}
+
+.feed-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.feed-card p {
+  margin: 0;
+  color: #63544c;
+  font-size: 0.92rem;
+}
+
+.nudge {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(360px, calc(100vw - 2rem));
+  background: #2b1711;
+  color: #fff6ee;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 20px 40px rgba(26, 11, 5, 0.35);
+  z-index: 30;
+}
+
+.nudge h3,
+.nudge p {
+  margin: 0 0 0.5rem;
+}
+
+.nudge button {
+  border: 0;
+  border-radius: 10px;
+  background: #ffc58e;
+  color: #3a1d10;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.nudge-strong {
+  background: #5b2013;
+}
+
+.nudge-hard-stop {
+  background: #73160c;
+}
+
+.intervention {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 8, 5, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  padding: 1rem;
+}
+
+.intervention-card {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.intervention-card h3 {
+  margin: 0;
+}
+
+.intervention-card p {
+  margin: 0.6rem 0 1rem;
+  color: #56423a;
+}
+
+.intervention-card button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 0.9rem;
+  background: #2f2019;
+  color: #fff;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1.2rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-form {
+    flex-direction: column;
+  }
+
+  .task-form button,
+  .delete {
+    width: 100%;
+  }
+
+  .task-list li {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
