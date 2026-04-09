@@ -11,13 +11,23 @@ const STEPS_TEMPLATE = [
   },
   {
     level: "hard-stop",
-    title: "Hard stop activated",
-    text: "Scrolling is paused briefly so your attention can reset.",
+    title: "Strong reflection nudge",
+    text: "Long scrolling streak detected. Take a short pause and intentionally return.",
   },
 ];
 
+const REOPEN_WINDOW_MS = 30 * 60 * 1000;
+const REOPEN_THRESHOLD = 3;
+const LATE_NIGHT_START_HOUR = 23;
+const LATE_NIGHT_END_HOUR = 6;
+const ACTIVITY_GRACE_MS = 7000;
+
 let settings = {
   enabled: true,
+  setupComplete: false,
+  isLoggedIn: false,
+  fullName: "",
+  focusReason: "",
   gentleSeconds: 10,
   strongSeconds: 20,
   hardStopSeconds: 30,
@@ -27,12 +37,12 @@ let settings = {
 };
 
 let sessionId = "";
-let lastScrollAt = 0;
+let lastActivityAt = 0;
 let liveActiveSeconds = 0;
 let pendingActiveSeconds = 0;
 let pendingScrollEvents = 0;
-let cooldownSecondsLeft = 0;
 const triggered = new Set();
+let hasActivityListeners = false;
 
 const sendMessage = (payload) =>
   new Promise((resolve) => {
@@ -61,17 +71,41 @@ const hostMatchesRule = (host, rule) => {
     return false;
   }
 
-  return host === cleanRule || host.endsWith(`.${cleanRule}`);
+  if (host === cleanRule || host.endsWith(`.${cleanRule}`)) {
+    return true;
+  }
+
+  // Accept shorthand rules like "youtube" to reduce silent mismatches.
+  if (!cleanRule.includes(".")) {
+    return host === cleanRule || host.includes(`.${cleanRule}.`) || host.endsWith(`.${cleanRule}`);
+  }
+
+  // Tolerate labels like "youtube app" by extracting usable tokens.
+  const tokens = cleanRule
+    .split(/[^a-z0-9.-]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+
+  for (const token of tokens) {
+    if (token.length < 3) {
+      continue;
+    }
+
+    if (host === token || host.endsWith(`.${token}`)) {
+      return true;
+    }
+
+    if (!token.includes(".") && (host.includes(`.${token}.`) || host.endsWith(`.${token}`))) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 const shouldRunOnHost = (host) => {
   const normalizedHost = host.toLowerCase();
   const allowDomains = Array.isArray(settings.allowDomains) ? settings.allowDomains : [];
-  const blockDomains = Array.isArray(settings.blockDomains) ? settings.blockDomains : [];
-
-  if (blockDomains.some((rule) => hostMatchesRule(normalizedHost, rule))) {
-    return false;
-  }
 
   if (allowDomains.length === 0) {
     return true;
@@ -79,6 +113,16 @@ const shouldRunOnHost = (host) => {
 
   return allowDomains.some((rule) => hostMatchesRule(normalizedHost, rule));
 };
+
+const getLocal = (keys) =>
+  new Promise((resolve) => {
+    chrome.storage.local.get(keys, (value) => resolve(value || {}));
+  });
+
+const setLocal = (value) =>
+  new Promise((resolve) => {
+    chrome.storage.local.set(value, () => resolve());
+  });
 
 const removeNudge = () => {
   const existing = document.getElementById("scrollsense-nudge");
@@ -131,54 +175,16 @@ const showNudge = async (step) => {
   });
 };
 
-const updateBlocker = () => {
-  let blocker = document.getElementById("scrollsense-blocker");
-
-  if (cooldownSecondsLeft <= 0) {
-    if (blocker) {
-      blocker.remove();
-    }
+const onInteractionActivity = () => {
+  if (!settings.enabled) {
     return;
   }
 
-  if (!blocker) {
-    blocker = document.createElement("section");
-    blocker.id = "scrollsense-blocker";
-
-    const card = document.createElement("div");
-    card.id = "scrollsense-blocker-card";
-
-    const heading = document.createElement("h3");
-    heading.textContent = "Hard stop active";
-
-    const text = document.createElement("p");
-    text.id = "scrollsense-blocker-text";
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Unlock now";
-    button.addEventListener("click", () => {
-      cooldownSecondsLeft = 0;
-      updateBlocker();
-    });
-
-    card.append(heading, text, button);
-    blocker.appendChild(card);
-    document.documentElement.appendChild(blocker);
-  }
-
-  const text = document.getElementById("scrollsense-blocker-text");
-  if (text) {
-    text.textContent = `Take a short reset. You can scroll again in ${cooldownSecondsLeft}s.`;
-  }
+  lastActivityAt = Date.now();
 };
 
-const onActivity = () => {
-  if (!settings.enabled || cooldownSecondsLeft > 0) {
-    return;
-  }
-
-  lastScrollAt = Date.now();
+const onScrollLikeActivity = () => {
+  onInteractionActivity();
   pendingScrollEvents += 1;
 };
 
@@ -189,53 +195,103 @@ const maybeTriggerNudges = async () => {
     if (liveActiveSeconds >= step.seconds && !triggered.has(step.level)) {
       triggered.add(step.level);
       await showNudge(step);
-
-      if (step.level === "hard-stop") {
-        cooldownSecondsLeft = settings.cooldownSeconds;
-        updateBlocker();
-      }
     }
   }
 };
 
+const detectRepeatedReopen = async () => {
+  const key = "scrollsenseOpenHistoryByHost";
+  const data = await getLocal([key]);
+  const historyByHost = data[key] || {};
+  const host = location.hostname.toLowerCase();
+  const now = Date.now();
+
+  const recent = Array.isArray(historyByHost[host])
+    ? historyByHost[host].filter((timestamp) => now - Number(timestamp) <= REOPEN_WINDOW_MS)
+    : [];
+
+  recent.push(now);
+  historyByHost[host] = recent;
+  await setLocal({ [key]: historyByHost });
+
+  if (recent.length >= REOPEN_THRESHOLD) {
+    await showNudge({
+      level: "strong",
+      title: "Repeated reopen pattern",
+      text: `You reopened ${host} ${recent.length} times in a short period. Consider a planned break before returning.`,
+    });
+  }
+};
+
+const detectLateNightUsage = async () => {
+  const hour = new Date().getHours();
+  const isLateNight = hour >= LATE_NIGHT_START_HOUR || hour < LATE_NIGHT_END_HOUR;
+  if (!isLateNight) {
+    return;
+  }
+
+  const key = "scrollsenseLateNightNudges";
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const host = location.hostname.toLowerCase();
+  const stamp = `${host}:${dateKey}`;
+  const data = await getLocal([key]);
+  const sent = Array.isArray(data[key]) ? data[key] : [];
+
+  if (sent.includes(stamp)) {
+    return;
+  }
+
+  sent.push(stamp);
+  await setLocal({ [key]: sent.slice(-200) });
+
+  await showNudge({
+    level: "gentle",
+    title: "Late-night usage detected",
+    text: "It is late night. A short wind-down now can protect tomorrow's focus.",
+  });
+};
+
 const startLoops = () => {
   setInterval(async () => {
-    if (!settings.enabled) {
-      return;
-    }
+    try {
+      if (!settings.enabled) {
+        return;
+      }
 
-    if (Date.now() - lastScrollAt < 2000 && cooldownSecondsLeft <= 0) {
-      liveActiveSeconds += 1;
-      pendingActiveSeconds += 1;
-      await maybeTriggerNudges();
-    }
-
-    if (cooldownSecondsLeft > 0) {
-      cooldownSecondsLeft -= 1;
-      updateBlocker();
+      if (Date.now() - lastActivityAt < ACTIVITY_GRACE_MS) {
+        liveActiveSeconds += 1;
+        pendingActiveSeconds += 1;
+        await maybeTriggerNudges();
+      }
+    } catch (_error) {
+      // Prevent interval exceptions from stopping future nudge checks.
     }
   }, 1000);
 
   setInterval(async () => {
-    if (!sessionId) {
-      return;
+    try {
+      if (!sessionId) {
+        return;
+      }
+
+      if (pendingActiveSeconds === 0 && pendingScrollEvents === 0) {
+        return;
+      }
+
+      const activeSeconds = pendingActiveSeconds;
+      const scrollEvents = pendingScrollEvents;
+      pendingActiveSeconds = 0;
+      pendingScrollEvents = 0;
+
+      await sendMessage({
+        type: "PING_SESSION",
+        sessionId,
+        activeSeconds,
+        scrollEvents,
+      });
+    } catch (_error) {
+      // Ignore transient ping failures and continue accumulating locally.
     }
-
-    if (pendingActiveSeconds === 0 && pendingScrollEvents === 0) {
-      return;
-    }
-
-    const activeSeconds = pendingActiveSeconds;
-    const scrollEvents = pendingScrollEvents;
-    pendingActiveSeconds = 0;
-    pendingScrollEvents = 0;
-
-    await sendMessage({
-      type: "PING_SESSION",
-      sessionId,
-      activeSeconds,
-      scrollEvents,
-    });
   }, 5000);
 };
 
@@ -249,15 +305,20 @@ const endSession = async (reason) => {
     sessionId,
     reason,
   });
+
+  sessionId = "";
+  liveActiveSeconds = 0;
+  pendingActiveSeconds = 0;
+  pendingScrollEvents = 0;
+  triggered.clear();
 };
 
-const initialize = async () => {
-  const settingsResponse = await sendMessage({ type: "GET_SETTINGS" });
-  if (settingsResponse?.ok && settingsResponse.settings) {
-    settings = settingsResponse.settings;
+const startSessionIfNeeded = async () => {
+  if (sessionId) {
+    return;
   }
 
-  if (!settings.enabled) {
+  if (!settings.enabled || !settings.setupComplete || !settings.isLoggedIn) {
     return;
   }
 
@@ -273,10 +334,43 @@ const initialize = async () => {
   if (startResponse?.ok) {
     sessionId = startResponse.sessionId;
   }
+};
 
-  window.addEventListener("scroll", onActivity, { passive: true });
-  window.addEventListener("wheel", onActivity, { passive: true });
-  window.addEventListener("touchmove", onActivity, { passive: true });
+const refreshSettingsAndSession = async () => {
+  const settingsResponse = await sendMessage({ type: "GET_SETTINGS" });
+  if (settingsResponse?.ok && settingsResponse.settings) {
+    settings = settingsResponse.settings;
+  }
+
+  const shouldBeActive =
+    settings.enabled && settings.setupComplete && settings.isLoggedIn && shouldRunOnHost(location.hostname);
+
+  if (!shouldBeActive) {
+    removeNudge();
+    await endSession("settings_disabled");
+    return;
+  }
+
+  await startSessionIfNeeded();
+};
+
+const initialize = async () => {
+  await refreshSettingsAndSession();
+
+  if (settings.enabled && settings.setupComplete && settings.isLoggedIn && shouldRunOnHost(location.hostname)) {
+    await detectRepeatedReopen();
+    await detectLateNightUsage();
+  }
+
+  if (!hasActivityListeners) {
+    window.addEventListener("scroll", onScrollLikeActivity, { passive: true });
+    window.addEventListener("wheel", onScrollLikeActivity, { passive: true });
+    window.addEventListener("touchmove", onScrollLikeActivity, { passive: true });
+    window.addEventListener("keydown", onInteractionActivity);
+    window.addEventListener("mousedown", onInteractionActivity);
+    window.addEventListener("pointerdown", onInteractionActivity);
+    hasActivityListeners = true;
+  }
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
@@ -289,6 +383,15 @@ const initialize = async () => {
   });
 
   startLoops();
+
+  // Keep extension state in sync so frontend deactivation takes effect in open tabs.
+  setInterval(async () => {
+    try {
+      await refreshSettingsAndSession();
+    } catch (_error) {
+      // Ignore transient backend/runtime issues and retry on next cycle.
+    }
+  }, 5000);
 };
 
 initialize();

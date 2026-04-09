@@ -21,7 +21,12 @@ const {
   endFocusSession,
   createFocusNudge,
   getFocusSummary,
+  getExtensionSetup,
+  saveExtensionSetup,
+  getAuthUserByEmail,
+  createAuthUser,
 } = require('./taskDb')
+const crypto = require('node:crypto')
 
 const app = express()
 const PORT = Number(process.env.PORT || 5000)
@@ -112,6 +117,86 @@ const createFocusNudgeSchema = z.object({
   message: z.string().trim().min(1).max(220),
   elapsedSeconds: z.number().int().min(0),
   accepted: z.boolean().default(false),
+})
+
+const authSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().trim().min(6).max(120),
+})
+
+const hashPassword = (password) =>
+  crypto.createHash('sha256').update(password).digest('hex')
+
+app.post('/api/auth/signup', async (request, response, next) => {
+  try {
+    const payload = authSchema.parse(request.body)
+    const passwordHash = hashPassword(payload.password)
+    const created = await createAuthUser(payload.email, passwordHash)
+
+    if (!created) {
+      return response.status(409).json({ message: 'Email already registered. Please login.' })
+    }
+
+    return response.status(201).json({
+      ok: true,
+      email: created.email,
+      mode: 'signup',
+    })
+  } catch (error) {
+    return next(error)
+  }
+})
+
+app.post('/api/auth/login', async (request, response, next) => {
+  try {
+    const payload = authSchema.parse(request.body)
+    const user = await getAuthUserByEmail(payload.email)
+
+    if (!user) {
+      return response.status(404).json({ message: 'Account not found. Please sign up first.' })
+    }
+
+    if (user.passwordHash !== hashPassword(payload.password)) {
+      return response.status(401).json({ message: 'Incorrect password.' })
+    }
+
+    return response.json({
+      ok: true,
+      email: user.email,
+      mode: 'login',
+    })
+  } catch (error) {
+    return next(error)
+  }
+})
+
+app.get('/api/auth/lookup', async (request, response, next) => {
+  try {
+    const email = String(request.query.email || '').trim().toLowerCase()
+
+    if (!email) {
+      return response.status(400).json({ message: 'Email is required.' })
+    }
+
+    const user = await getAuthUserByEmail(email)
+    return response.json({ exists: Boolean(user), email })
+  } catch (error) {
+    return next(error)
+  }
+})
+
+const extensionSetupSchema = z.object({
+  loginEmail: z.string().trim().email(),
+  fullName: z.string().trim().min(1).max(120),
+  dailyGoalMinutes: z.number().int().min(15).max(600),
+  focusReason: z.string().trim().min(1).max(300),
+  monitorDomains: z.array(z.string().trim().min(1)).max(100).default([]),
+  allowDomains: z.array(z.string().trim().min(1)).max(100).default([]),
+  gentleSeconds: z.number().int().min(10).max(3600).default(10),
+  strongSeconds: z.number().int().min(20).max(3600).default(20),
+  hardStopSeconds: z.number().int().min(30).max(3600).default(30),
+  cooldownSeconds: z.number().int().min(5).max(3600).default(20),
+  apiBase: z.string().trim().url().default('http://localhost:5000'),
 })
 
 app.get('/api/health', (_request, response) => {
@@ -232,6 +317,72 @@ app.post('/api/focus/nudge', async (request, response, next) => {
     response.status(201).json(nudge)
   } catch (error) {
     next(error)
+  }
+})
+
+app.get('/api/extension/setup', async (_request, response, next) => {
+  try {
+    const setup = await getExtensionSetup()
+    response.json(setup)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/extension/setup', async (request, response, next) => {
+  try {
+    const payload = extensionSetupSchema.parse(request.body)
+    const normalizedMonitorDomains = payload.monitorDomains.map((value) =>
+      value.trim().toLowerCase().replace(/^\./, ''),
+    )
+    const normalizedAllowDomains = payload.allowDomains.map((value) =>
+      value.trim().toLowerCase().replace(/^\./, ''),
+    )
+
+    const normalized = {
+      enabled: true,
+      setupComplete: true,
+      isLoggedIn: true,
+      loginEmail: payload.loginEmail.toLowerCase(),
+      fullName: payload.fullName,
+      dailyGoalMinutes: payload.dailyGoalMinutes,
+      focusReason: payload.focusReason,
+      monitorDomains: normalizedMonitorDomains,
+      // Keep compatibility with existing extension settings key.
+      blockDomains: [],
+      allowDomains: normalizedAllowDomains.length > 0 ? normalizedAllowDomains : normalizedMonitorDomains,
+      gentleSeconds: payload.gentleSeconds,
+      strongSeconds: payload.strongSeconds,
+      hardStopSeconds: payload.hardStopSeconds,
+      cooldownSeconds: payload.cooldownSeconds,
+      apiBase: payload.apiBase,
+    }
+
+    const saved = await saveExtensionSetup(normalized)
+    response.status(201).json(saved)
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/extension/deactivate', async (_request, response, next) => {
+  try {
+    const existing = await getExtensionSetup()
+
+    if (!existing?.config) {
+      return response.status(404).json({ message: 'No setup found to deactivate.' })
+    }
+
+    const normalized = {
+      ...existing.config,
+      enabled: false,
+      setupComplete: false,
+    }
+
+    const saved = await saveExtensionSetup(normalized)
+    return response.json(saved)
+  } catch (error) {
+    return next(error)
   }
 })
 

@@ -80,8 +80,8 @@ This serves:
 ## Anti-Doomscroll Features
 
 - Tracks active scrolling streaks in real time
-- Fires progressive nudges at threshold levels (gentle, strong, hard-stop)
-- Enforces a temporary hard-stop overlay to break long streaks
+- Detects prolonged scrolling sessions, repeated reopen patterns, and late-night usage
+- Fires progressive micro-nudges at threshold levels (gentle, strong, reflection)
 - Persists session and nudge analytics in SQLite for later review
 
 ## Browser Extension Mode (Real Sites)
@@ -103,16 +103,47 @@ This repo now includes a Chrome extension in `extension/` that runs on:
 
 ### Configure Extension
 
-1. Open extension details and click **Extension options**
-2. Keep API base URL as `http://localhost:5000` (or change to your deployed API)
-3. Set nudge thresholds and cooldown duration
-4. Optional: configure allow-list and block-list domains (comma separated)
+1. Start backend and frontend (`npm run dev`)
+2. Open frontend app (`http://localhost:5173`)
+3. Fill login, required details, and blocked domains
+4. Click **Activate Protection**
+5. Reload open social tabs so extension applies the latest setup and starts detection
+
+Extension Options now acts as a lightweight status/sync page only.
+
+## Python Prototype Modules
+
+A lightweight Python prototype is available in `python_prototype/` with:
+
+- synthetic smartphone usage log generation
+- behavior detection algorithms
+- nudge classification engine
+- console workflow
+- Tkinter desktop UI
+- static HTML dashboard generation
+
+See `python_prototype/README.md` for setup and run commands.
 
 Allow/block rules:
 
 - `allow-list` empty: extension runs on all supported sites
 - `allow-list` set: extension runs only on listed domains/subdomains
-- `block-list`: always excluded, even if present in allow-list
+- `block-list`: fully blocked with an overlay on matching domains
+
+## Frontend-Based Activation (No Manual Extension Form Needed)
+
+You can now complete setup from the web frontend instead of the extension options page.
+
+1. Start backend and frontend (`npm run dev` from root, or run each separately)
+2. Open the frontend app in browser (default `http://localhost:5173`)
+3. Fill:
+	- login email + password
+	- required profile details
+	- blocked domains
+4. Click **Activate Protection**
+5. Reload any open social-feed tabs
+
+The extension auto-syncs setup from backend (`GET /api/extension/setup`) and applies blocking/nudge settings automatically.
 
 ### Run with Backend
 

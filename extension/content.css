@@ -85,3 +85,43 @@
   cursor: pointer;
   font-weight: 700;
 }
+
+#scrollsense-domain-blocker {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  background: linear-gradient(140deg, #1f0e0a, #33160e) !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 16px !important;
+  font-family: Segoe UI, Arial, sans-serif !important;
+}
+
+#scrollsense-domain-blocker-card {
+  width: min(500px, calc(100vw - 24px)) !important;
+  background: #fff7ef !important;
+  color: #2d1a12 !important;
+  border-radius: 14px !important;
+  padding: 18px !important;
+  text-align: center !important;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35) !important;
+}
+
+#scrollsense-domain-blocker-card h3 {
+  margin: 0 0 8px !important;
+}
+
+#scrollsense-domain-blocker-card p {
+  margin: 0 0 8px !important;
+  line-height: 1.45 !important;
+}
+
+#scrollsense-domain-blocker-reason {
+  color: #6d4431 !important;
+}
+
+#scrollsense-domain-blocker-user {
+  margin-bottom: 0 !important;
+  color: #8d603f !important;
+  font-weight: 600 !important;
+}

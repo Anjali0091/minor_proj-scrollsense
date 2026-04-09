@@ -6,13 +6,16 @@
   "permissions": ["storage"],
   "host_permissions": [
     "http://localhost:5000/*",
-    "https://www.youtube.com/*",
-    "https://m.youtube.com/*",
+    "https://youtube.com/*",
+    "https://*.youtube.com/*",
     "https://x.com/*",
-    "https://www.instagram.com/*",
-    "https://www.reddit.com/*",
-    "https://www.facebook.com/*",
-    "https://m.facebook.com/*"
+    "https://*.x.com/*",
+    "https://instagram.com/*",
+    "https://*.instagram.com/*",
+    "https://reddit.com/*",
+    "https://*.reddit.com/*",
+    "https://facebook.com/*",
+    "https://*.facebook.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -20,13 +23,16 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.youtube.com/*",
-        "https://m.youtube.com/*",
+        "https://youtube.com/*",
+        "https://*.youtube.com/*",
         "https://x.com/*",
-        "https://www.instagram.com/*",
-        "https://www.reddit.com/*",
-        "https://www.facebook.com/*",
-        "https://m.facebook.com/*"
+        "https://*.x.com/*",
+        "https://instagram.com/*",
+        "https://*.instagram.com/*",
+        "https://reddit.com/*",
+        "https://*.reddit.com/*",
+        "https://facebook.com/*",
+        "https://*.facebook.com/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

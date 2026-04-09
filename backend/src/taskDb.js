@@ -63,6 +63,23 @@ const initDb = async () => {
     );
   `)
 
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS extension_setup (
+      id TEXT PRIMARY KEY,
+      configJson TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+  `)
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_users (
+      email TEXT PRIMARY KEY,
+      passwordHash TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+  `)
+
   const row = await db.get('SELECT COUNT(*) AS count FROM tasks')
   if (!row || row.count === 0) {
     const now = new Date().toISOString()
@@ -247,6 +264,91 @@ const getFocusSummary = async () => {
   }
 }
 
+const getExtensionSetup = async () => {
+  const row = await db.get(
+    'SELECT configJson, updatedAt FROM extension_setup WHERE id = ?',
+    ['default'],
+  )
+
+  if (!row) {
+    return {
+      activated: false,
+      config: null,
+      updatedAt: null,
+    }
+  }
+
+  const config = JSON.parse(row.configJson)
+
+  return {
+    activated: Boolean(config?.enabled && config?.setupComplete),
+    config,
+    updatedAt: row.updatedAt,
+  }
+}
+
+const saveExtensionSetup = async (config) => {
+  const now = new Date().toISOString()
+  const serialized = JSON.stringify(config)
+
+  await db.run(
+    `INSERT INTO extension_setup (id, configJson, updatedAt)
+     VALUES (?, ?, ?)
+     ON CONFLICT(id)
+     DO UPDATE SET configJson = excluded.configJson, updatedAt = excluded.updatedAt`,
+    ['default', serialized, now],
+  )
+
+  return {
+    activated: Boolean(config?.enabled && config?.setupComplete),
+    config,
+    updatedAt: now,
+  }
+}
+
+const getAuthUserByEmail = async (email) => {
+  const row = await db.get('SELECT * FROM auth_users WHERE email = ?', [email.toLowerCase()])
+  if (!row) {
+    return null
+  }
+
+  return {
+    email: row.email,
+    passwordHash: row.passwordHash,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
+const createAuthUser = async (email, passwordHash) => {
+  const existing = await getAuthUserByEmail(email)
+  if (existing) {
+    return null
+  }
+
+  const now = new Date().toISOString()
+  const normalizedEmail = email.toLowerCase()
+
+  await db.run(
+    'INSERT INTO auth_users (email, passwordHash, createdAt, updatedAt) VALUES (?, ?, ?, ?)',
+    [normalizedEmail, passwordHash, now, now],
+  )
+
+  return getAuthUserByEmail(normalizedEmail)
+}
+
+const updateAuthUserPassword = async (email, passwordHash) => {
+  const normalizedEmail = email.toLowerCase()
+  const existing = await getAuthUserByEmail(normalizedEmail)
+  if (!existing) {
+    return null
+  }
+
+  const now = new Date().toISOString()
+  await db.run('UPDATE auth_users SET passwordHash = ?, updatedAt = ? WHERE email = ?', [passwordHash, now, normalizedEmail])
+  return getAuthUserByEmail(normalizedEmail)
+}
+
 module.exports = {
   initDb,
   listTasks,
@@ -260,4 +362,9 @@ module.exports = {
   endFocusSession,
   createFocusNudge,
   getFocusSummary,
+  getExtensionSetup,
+  saveExtensionSetup,
+  getAuthUserByEmail,
+  createAuthUser,
+  updateAuthUserPassword,
 }

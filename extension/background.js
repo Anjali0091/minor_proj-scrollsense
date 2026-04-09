@@ -6,6 +6,26 @@ const getApiBase = async () => {
   return data.apiBase || DEFAULT_API_BASE;
 };
 
+const syncSetupFromBackend = async () => {
+  try {
+    const apiBase = await getApiBase();
+    const response = await fetch(`${apiBase}/api/extension/setup`);
+
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    if (!payload?.config) {
+      return;
+    }
+
+    await chrome.storage.sync.set(payload.config);
+  } catch (_error) {
+    // Keep existing local settings if backend sync is unavailable.
+  }
+};
+
 const postJson = async (path, body) => {
   const apiBase = await getApiBase();
   const response = await fetch(`${apiBase}${path}`, {
@@ -96,7 +116,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       if (message.type === "GET_SETTINGS") {
+        await syncSetupFromBackend();
+
         const data = await chrome.storage.sync.get([
+          "setupComplete",
+          "isLoggedIn",
+          "loginEmail",
+          "fullName",
+          "dailyGoalMinutes",
+          "focusReason",
           "gentleSeconds",
           "strongSeconds",
           "hardStopSeconds",
@@ -110,6 +138,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           ok: true,
           settings: {
+            setupComplete: Boolean(data.setupComplete),
+            isLoggedIn: Boolean(data.isLoggedIn),
+            loginEmail: data.loginEmail || "",
+            fullName: data.fullName || "",
+            dailyGoalMinutes: Number(data.dailyGoalMinutes || 90),
+            focusReason: data.focusReason || "",
             gentleSeconds: Number(data.gentleSeconds || 10),
             strongSeconds: Number(data.strongSeconds || 20),
             hardStopSeconds: Number(data.hardStopSeconds || 30),
